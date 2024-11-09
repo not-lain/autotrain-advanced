@@ -1,6 +1,9 @@
 import os
 from dataclasses import dataclass
 from typing import Optional
+from huggingface_hub import whoami
+from huggingface_hub.utils._token import get_token
+from huggingface_hub.errors import LocalTokenNotFoundError
 
 import requests
 
@@ -210,13 +213,27 @@ class Client:
             self.host = AUTOTRAIN_API
 
         if self.token is None:
-            self.token = os.environ.get("HF_TOKEN")
+            self.token = get_token()
 
         if self.username is None:
+            # since username can be an organization we can keep it on top
             self.username = os.environ.get("HF_USERNAME")
+            # retrieve username using the huggingface token
+            if self.username is None:
+                try : 
+                     self.username = whoami()["name"]
+                except LocalTokenNotFoundError : 
+                    pass
+
 
         if self.token is None or self.username is None:
             raise ValueError("Please provide a valid username and token")
+        
+        # Check if the provided username is related to the provided token
+        organizations = [i['name'] for i in whoami()["orgs"]]
+        organizations.insert(0,whoami()["name"])
+        if self.username not in organizations : 
+            raise ValueError(f"The provided username {self.username} is not related to {organizations}. Please provide a valid one")
 
         self.headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
 
